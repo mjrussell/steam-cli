@@ -1,0 +1,27 @@
+{
+  "name": "steam-cli",
+  "version": "0.1.0",
+  "description": "CLI tool for browsing and discovering Steam games",
+  "type": "module",
+  "bin": {
+    "steam": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "keywords": ["steam", "cli", "games"],
+  "author": "Matt Russell",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "steamapi": "^3.1.4",
+    "chalk": "^5.3.0",
+    "cli-table3": "^0.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2"
+  }
+}
