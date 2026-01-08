@@ -16,7 +16,13 @@ export async function getSteamClient(): Promise<SteamAPI> {
     );
   }
 
-  steamClient = new SteamAPI(apiKey);
+  // Configure with localhost referer for domain-restricted API keys
+  steamClient = new SteamAPI(apiKey, {
+    headers: {
+      'Referer': 'http://localhost/',
+      'Origin': 'http://localhost'
+    }
+  });
   return steamClient;
 }
 

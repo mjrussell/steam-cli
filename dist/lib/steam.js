@@ -9,7 +9,13 @@ export async function getSteamClient() {
     if (!apiKey) {
         throw new Error('Steam API key not found. Set STEAM_API_KEY env var or run: steam config set-key <key>');
     }
-    steamClient = new SteamAPI(apiKey);
+    // Configure with localhost referer for domain-restricted API keys
+    steamClient = new SteamAPI(apiKey, {
+        headers: {
+            'Referer': 'http://localhost/',
+            'Origin': 'http://localhost'
+        }
+    });
     return steamClient;
 }
 export async function resolveUser(usernameOrId) {
