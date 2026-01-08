@@ -22,7 +22,7 @@ export async function getSteamClient(): Promise<SteamAPI> {
       'Referer': 'http://localhost/',
       'Origin': 'http://localhost'
     }
-  });
+  } as any);
   return steamClient;
 }
 
@@ -47,15 +47,18 @@ export async function getUserLibrary(steamId?: string): Promise<GameInfo[]> {
     throw new Error('Steam ID not configured. Run: steam config set-user <username>');
   }
 
-  const games = await client.getUserOwnedGames(id);
+  const games = await client.getUserOwnedGames(id, {
+    includeAppInfo: true,
+    includeFreeGames: true
+  });
   
-  return games.map((game: any) => ({
-    appId: game.appID,
-    name: game.name,
-    playtime: game.playTime,
-    playtimeLastTwoWeeks: game.playTime2,
-    imgIconUrl: game.iconURL,
-    imgLogoUrl: game.logoURL
+  return games.map((userPlaytime: any) => ({
+    appId: userPlaytime.game.id,
+    name: userPlaytime.game.name,
+    playtime: userPlaytime.minutes,
+    playtimeLastTwoWeeks: userPlaytime.recentMinutes,
+    imgIconUrl: userPlaytime.game.iconURL,
+    imgLogoUrl: userPlaytime.game.logoURL
   }));
 }
 

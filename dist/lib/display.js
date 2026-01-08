@@ -21,16 +21,18 @@ export function displayGamesTable(games) {
     });
     for (const game of games) {
         table.push([
-            game.name,
-            formatPlaytime(game.playtime),
-            game.appId.toString()
+            game.name || '(Unknown)',
+            formatPlaytime(game.playtime || 0),
+            game.appId?.toString() || 'N/A'
         ]);
     }
     console.log(table.toString());
 }
 export function displayGamesList(games) {
     for (const game of games) {
-        const playtime = formatPlaytime(game.playtime);
-        console.log(`${chalk.bold(game.name)} - ${playtime} (${chalk.gray(game.appId)})`);
+        const playtime = formatPlaytime(game.playtime || 0);
+        const name = game.name || '(Unknown)';
+        const appId = game.appId?.toString() || 'N/A';
+        console.log(`${chalk.bold(name)} - ${playtime} (${chalk.gray(appId)})`);
     }
 }

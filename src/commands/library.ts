@@ -68,6 +68,10 @@ function sortGames(games: GameInfo[], sortBy: string): GameInfo[] {
       return sorted.sort((a, b) => b.playtime - a.playtime);
     case 'name':
     default:
-      return sorted.sort((a, b) => a.name.localeCompare(b.name));
+      return sorted.sort((a, b) => {
+        const nameA = a.name || '';
+        const nameB = b.name || '';
+        return nameA.localeCompare(nameB);
+      });
   }
 }

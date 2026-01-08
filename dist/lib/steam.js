@@ -34,14 +34,17 @@ export async function getUserLibrary(steamId) {
     if (!id) {
         throw new Error('Steam ID not configured. Run: steam config set-user <username>');
     }
-    const games = await client.getUserOwnedGames(id);
-    return games.map((game) => ({
-        appId: game.appID,
-        name: game.name,
-        playtime: game.playTime,
-        playtimeLastTwoWeeks: game.playTime2,
-        imgIconUrl: game.iconURL,
-        imgLogoUrl: game.logoURL
+    const games = await client.getUserOwnedGames(id, {
+        includeAppInfo: true,
+        includeFreeGames: true
+    });
+    return games.map((userPlaytime) => ({
+        appId: userPlaytime.game.id,
+        name: userPlaytime.game.name,
+        playtime: userPlaytime.minutes,
+        playtimeLastTwoWeeks: userPlaytime.recentMinutes,
+        imgIconUrl: userPlaytime.game.iconURL,
+        imgLogoUrl: userPlaytime.game.logoURL
     }));
 }
 export async function getGameDetails(appId) {
