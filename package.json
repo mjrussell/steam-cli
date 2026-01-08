@@ -1,0 +1,49 @@
+{
+  "name": "steam-cli",
+  "version": "0.1.0",
+  "description": "CLI tool for browsing and managing your Steam game library",
+  "author": "Matt Russell <matthewjosephrussell@gmail.com>",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "steam": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "steam",
+    "games",
+    "library",
+    "cli",
+    "steam-deck",
+    "playtime"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mjrussell/steam-cli"
+  },
+  "bugs": {
+    "url": "https://github.com/mjrussell/steam-cli/issues"
+  },
+  "homepage": "https://github.com/mjrussell/steam-cli#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsup": "^8.0.1",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "cli-table3": "^0.6.5",
+    "commander": "^12.1.0",
+    "steamapi": "^3.1.4"
+  }
+}
