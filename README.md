@@ -21,6 +21,14 @@ pnpm build
 ln -s $(pwd)/dist/cli.js ~/.local/bin/steam
 ```
 
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `steam whoami` | Show current user profile and stats |
+| `steam library` | Browse and filter your game library |
+| `steam config` | Manage configuration |
+
 ## Quick Start
 
 1. **Get your Steam Web API key** from https://steamcommunity.com/dev/apikey
@@ -37,6 +45,16 @@ ln -s $(pwd)/dist/cli.js ~/.local/bin/steam
    ```
 
 ## Usage
+
+### Profile
+
+```bash
+# Show your Steam profile and library stats
+steam whoami
+
+# JSON output
+steam whoami --json
+```
 
 ### Basic Commands
 
