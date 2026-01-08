@@ -15,32 +15,54 @@ export function formatPlaytime(minutes: number): string {
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
-export function displayGamesTable(games: GameInfo[]): void {
-  const table = new Table({
-    head: [
-      chalk.cyan('Name'),
-      chalk.cyan('Playtime'),
-      chalk.cyan('App ID')
-    ],
-    colWidths: [60, 20, 15]
-  });
+export function displayGamesTable(games: GameInfo[], showDeck: boolean = false): void {
+  const head = [
+    chalk.cyan('Name'),
+    chalk.cyan('Playtime')
+  ];
+  const colWidths = [50, 20];
+  
+  if (showDeck) {
+    head.push(chalk.cyan('Deck Time'));
+    colWidths.push(20);
+  }
+  
+  head.push(chalk.cyan('App ID'));
+  colWidths.push(15);
+  
+  const table = new Table({ head, colWidths });
 
   for (const game of games) {
-    table.push([
+    const row: string[] = [
       game.name || '(Unknown)',
-      formatPlaytime(game.playtime || 0),
-      game.appId?.toString() || 'N/A'
-    ]);
+      formatPlaytime(game.playtime || 0)
+    ];
+    
+    if (showDeck) {
+      row.push(formatPlaytime(game.playtimeDeck || 0));
+    }
+    
+    row.push(game.appId?.toString() || 'N/A');
+    table.push(row);
   }
 
   console.log(table.toString());
 }
 
-export function displayGamesList(games: GameInfo[]): void {
+export function displayGamesList(games: GameInfo[], showDeck: boolean = false): void {
   for (const game of games) {
     const playtime = formatPlaytime(game.playtime || 0);
     const name = game.name || '(Unknown)';
     const appId = game.appId?.toString() || 'N/A';
-    console.log(`${chalk.bold(name)} - ${playtime} (${chalk.gray(appId)})`);
+    
+    let output = `${chalk.bold(name)} - ${playtime}`;
+    
+    if (showDeck && game.playtimeDeck) {
+      const deckTime = formatPlaytime(game.playtimeDeck);
+      output += ` ${chalk.green('[Deck: ' + deckTime + ']')}`;
+    }
+    
+    output += ` (${chalk.gray(appId)})`;
+    console.log(output);
   }
 }

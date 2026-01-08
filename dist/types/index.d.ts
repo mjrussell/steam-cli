@@ -8,6 +8,7 @@ export interface GameInfo {
     name: string;
     playtime: number;
     playtimeLastTwoWeeks?: number;
+    playtimeDeck?: number;
     imgIconUrl?: string;
     imgLogoUrl?: string;
 }

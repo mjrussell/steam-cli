@@ -34,17 +34,24 @@ export async function getUserLibrary(steamId) {
     if (!id) {
         throw new Error('Steam ID not configured. Run: steam config set-user <username>');
     }
-    const games = await client.getUserOwnedGames(id, {
-        includeAppInfo: true,
-        includeFreeGames: true
+    // Make direct API call to get Deck playtime (library doesn't expose it)
+    const apiKey = await getApiKey();
+    const response = await fetch(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${apiKey}&steamid=${id}&include_appinfo=1&include_played_free_games=1&format=json`, {
+        headers: {
+            'Referer': 'http://localhost/',
+            'Origin': 'http://localhost'
+        }
     });
-    return games.map((userPlaytime) => ({
-        appId: userPlaytime.game.id,
-        name: userPlaytime.game.name,
-        playtime: userPlaytime.minutes,
-        playtimeLastTwoWeeks: userPlaytime.recentMinutes,
-        imgIconUrl: userPlaytime.game.iconURL,
-        imgLogoUrl: userPlaytime.game.logoURL
+    const data = await response.json();
+    const games = data.response?.games || [];
+    return games.map((game) => ({
+        appId: game.appid,
+        name: game.name,
+        playtime: game.playtime_forever,
+        playtimeLastTwoWeeks: game.playtime_2weeks || 0,
+        playtimeDeck: game.playtime_deck_forever || 0,
+        imgIconUrl: game.img_icon_url,
+        imgLogoUrl: game.img_logo_url
     }));
 }
 export async function getGameDetails(appId) {

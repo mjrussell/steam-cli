@@ -9,7 +9,9 @@ export function createLibraryCommand() {
         .option('--unplayed', 'Show only unplayed games')
         .option('--min-hours <hours>', 'Minimum playtime in hours', parseFloat)
         .option('--max-hours <hours>', 'Maximum playtime in hours', parseFloat)
-        .option('--sort <field>', 'Sort by: name, playtime', 'name')
+        .option('--deck', 'Show only games played on Steam Deck')
+        .option('--deck-hours', 'Show Steam Deck playtime in output')
+        .option('--sort <field>', 'Sort by: name, playtime, deck', 'name')
         .option('--plain', 'Plain list output (no table)')
         .action(async (options) => {
         try {
@@ -27,6 +29,9 @@ export function createLibraryCommand() {
                 const maxMinutes = options.maxHours * 60;
                 games = games.filter(g => g.playtime <= maxMinutes);
             }
+            if (options.deck) {
+                games = games.filter(g => (g.playtimeDeck || 0) > 0);
+            }
             // Apply sorting
             games = sortGames(games, options.sort);
             // Apply limit
@@ -36,10 +41,10 @@ export function createLibraryCommand() {
             // Display results
             console.log(chalk.bold(`\nFound ${games.length} games:\n`));
             if (options.plain) {
-                displayGamesList(games);
+                displayGamesList(games, options.deckHours);
             }
             else {
-                displayGamesTable(games);
+                displayGamesTable(games, options.deckHours);
             }
         }
         catch (error) {
@@ -54,6 +59,8 @@ function sortGames(games, sortBy) {
     switch (sortBy.toLowerCase()) {
         case 'playtime':
             return sorted.sort((a, b) => b.playtime - a.playtime);
+        case 'deck':
+            return sorted.sort((a, b) => (b.playtimeDeck || 0) - (a.playtimeDeck || 0));
         case 'name':
         default:
             return sorted.sort((a, b) => {
