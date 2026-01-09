@@ -16,7 +16,18 @@ export interface GameInfo {
   reviewScoreDesc?: string;
   reviewPositive?: number;
   reviewNegative?: number;
+  deckCompat?: DeckCompatCategory;
+  deckCompatDesc?: string;
 }
+
+export type DeckCompatCategory = 0 | 1 | 2 | 3;
+
+export const DECK_COMPAT_LABELS: Record<DeckCompatCategory, string> = {
+  0: 'Unknown',
+  1: 'Unsupported',
+  2: 'Playable',
+  3: 'Verified'
+};
 
 export interface ReviewData {
   reviewScore: number;

@@ -1,6 +1,7 @@
 import SteamAPI from 'steamapi';
 import { getApiKey, getSteamId, saveConfig, loadConfig } from './config';
-import type { GameInfo, ReviewData } from '../types/index';
+import type { GameInfo, ReviewData, DeckCompatCategory } from '../types/index';
+import { DECK_COMPAT_LABELS } from '../types/index';
 
 let steamClient: SteamAPI | null = null;
 
@@ -130,6 +131,50 @@ export async function enrichGamesWithReviews(
       reviewScoreDesc: reviews?.reviewScoreDesc,
       reviewPositive: reviews?.totalPositive,
       reviewNegative: reviews?.totalNegative
+    });
+    
+    // Small delay to avoid rate limiting
+    if (i < games.length - 1) {
+      await new Promise(r => setTimeout(r, 50));
+    }
+  }
+  
+  return enriched;
+}
+
+export async function getDeckCompatibility(appId: number): Promise<DeckCompatCategory | null> {
+  try {
+    const response = await fetch(
+      `https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID=${appId}`
+    );
+    const data = await response.json() as any;
+    
+    if (data.success !== 1 || !data.results) {
+      return null;
+    }
+    
+    return (data.results.resolved_category as DeckCompatCategory) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function enrichGamesWithDeckCompat(
+  games: GameInfo[],
+  onProgress?: (current: number, total: number) => void
+): Promise<GameInfo[]> {
+  const enriched: GameInfo[] = [];
+  
+  for (let i = 0; i < games.length; i++) {
+    const game = games[i];
+    onProgress?.(i + 1, games.length);
+    
+    const compat = await getDeckCompatibility(game.appId);
+    
+    enriched.push({
+      ...game,
+      deckCompat: compat ?? undefined,
+      deckCompatDesc: compat !== null ? DECK_COMPAT_LABELS[compat] : undefined
     });
     
     // Small delay to avoid rate limiting

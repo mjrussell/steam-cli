@@ -1,8 +1,8 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { getUserLibrary, enrichGamesWithReviews } from '../lib/steam';
+import { getUserLibrary, enrichGamesWithReviews, enrichGamesWithDeckCompat } from '../lib/steam';
 import { displayGamesTable, displayGamesList } from '../lib/display';
-import type { GameInfo } from '../types/index';
+import type { GameInfo, DeckCompatCategory } from '../types/index';
 import { REVIEW_CATEGORIES, type ReviewCategory } from '../types/index';
 
 // Map review category names to score ranges
@@ -18,35 +18,55 @@ const REVIEW_SCORE_MAP: Record<ReviewCategory, number> = {
   'overwhelmingly-positive': 9
 };
 
+const DECK_COMPAT_MAP: Record<string, DeckCompatCategory[]> = {
+  'verified': [3],
+  'playable': [2],
+  'unsupported': [1],
+  'unknown': [0],
+  'ok': [2, 3],           // playable or better
+  'any': [1, 2, 3],       // any known status
+};
+
 function parseReviewFilter(value: string): number[] {
   const lower = value.toLowerCase().replace(/\s+/g, '-');
   
-  // Check for exact category match
   if (lower in REVIEW_SCORE_MAP) {
     return [REVIEW_SCORE_MAP[lower as ReviewCategory]];
   }
   
-  // Check for "positive" (includes positive, very-positive, overwhelmingly-positive)
   if (lower === 'positive+' || lower === 'positive-or-better') {
     return [7, 8, 9];
   }
   
-  // Check for shorthand categories
   if (lower === 'positive-any' || lower === 'any-positive') {
-    return [6, 7, 8, 9]; // mostly-positive and above
+    return [6, 7, 8, 9];
   }
   
   if (lower === 'negative-any' || lower === 'any-negative') {
-    return [1, 2, 3, 4]; // mostly-negative and below
+    return [1, 2, 3, 4];
   }
   
-  // Check for numeric score
   const num = parseInt(value);
   if (!isNaN(num) && num >= 1 && num <= 9) {
     return [num];
   }
   
   throw new Error(`Invalid review filter: ${value}. Use category name (e.g., "very-positive", "mixed") or score 1-9.`);
+}
+
+function parseDeckCompatFilter(value: string): DeckCompatCategory[] {
+  const lower = value.toLowerCase();
+  
+  if (lower in DECK_COMPAT_MAP) {
+    return DECK_COMPAT_MAP[lower];
+  }
+  
+  const num = parseInt(value);
+  if (!isNaN(num) && num >= 0 && num <= 3) {
+    return [num as DeckCompatCategory];
+  }
+  
+  throw new Error(`Invalid deck compat filter: ${value}. Use: verified, playable, unsupported, unknown, ok (playable+verified)`);
 }
 
 export function createLibraryCommand(): Command {
@@ -58,7 +78,9 @@ export function createLibraryCommand(): Command {
     .option('--max-hours <hours>', 'Maximum playtime in hours', parseFloat)
     .option('--deck', 'Show only games played on Steam Deck')
     .option('--deck-hours', 'Show Steam Deck playtime in output')
-    .option('--sort <field>', 'Sort by: name, playtime, deck, reviews', 'name')
+    .option('--deck-compat <status>', 'Filter by Deck compatibility: verified, playable, unsupported, unknown, ok')
+    .option('--show-compat', 'Show Deck compatibility in output')
+    .option('--sort <field>', 'Sort by: name, playtime, deck, reviews, compat', 'name')
     .option('--plain', 'Plain list output (no table)')
     .option('--json', 'Output as JSON')
     .option('--reviews <category>', 'Filter by review category (e.g., very-positive, mixed, positive+)')
@@ -69,6 +91,7 @@ export function createLibraryCommand(): Command {
       try {
         const needsReviews = options.reviews || options.minReviews || options.maxReviews || 
                            options.showReviews || options.sort === 'reviews';
+        const needsDeckCompat = options.deckCompat || options.showCompat || options.sort === 'compat';
         
         if (!options.json) {
           console.error(chalk.blue('Fetching your Steam library...'));
@@ -76,7 +99,7 @@ export function createLibraryCommand(): Command {
         
         let games = await getUserLibrary();
         
-        // Apply non-review filters first (to minimize API calls)
+        // Apply basic filters first (to minimize API calls)
         if (options.unplayed) {
           games = games.filter(g => g.playtime === 0);
         }
@@ -95,9 +118,9 @@ export function createLibraryCommand(): Command {
           games = games.filter(g => (g.playtimeDeck || 0) > 0);
         }
         
-        // Apply limit before fetching reviews (if no review sorting)
-        const earlyLimit = options.limit && !needsReviews;
-        if (earlyLimit) {
+        // Apply early limit if no enrichment needed
+        const needsEnrichment = needsReviews || needsDeckCompat;
+        if (options.limit && !needsEnrichment) {
           games = sortGames(games, options.sort);
           games = games.slice(0, options.limit);
         }
@@ -110,7 +133,7 @@ export function createLibraryCommand(): Command {
           
           games = await enrichGamesWithReviews(games, (current, total) => {
             if (!options.json && process.stderr.isTTY) {
-              process.stderr.write(`\r${chalk.gray(`Progress: ${current}/${total}`)}`);
+              process.stderr.write(`\r${chalk.gray(`Reviews: ${current}/${total}`)}`);
             }
           });
           
@@ -133,11 +156,34 @@ export function createLibraryCommand(): Command {
           }
         }
         
+        // Fetch deck compatibility if needed
+        if (needsDeckCompat) {
+          if (!options.json) {
+            console.error(chalk.blue(`Fetching Deck compatibility for ${games.length} games...`));
+          }
+          
+          games = await enrichGamesWithDeckCompat(games, (current, total) => {
+            if (!options.json && process.stderr.isTTY) {
+              process.stderr.write(`\r${chalk.gray(`Deck compat: ${current}/${total}`)}`);
+            }
+          });
+          
+          if (!options.json && process.stderr.isTTY) {
+            process.stderr.write('\r' + ' '.repeat(30) + '\r');
+          }
+          
+          // Apply deck compat filter
+          if (options.deckCompat) {
+            const allowedCompat = parseDeckCompatFilter(options.deckCompat);
+            games = games.filter(g => g.deckCompat !== undefined && allowedCompat.includes(g.deckCompat));
+          }
+        }
+        
         // Apply sorting
         games = sortGames(games, options.sort);
         
         // Apply limit (if not already applied)
-        if (options.limit && !earlyLimit) {
+        if (options.limit && needsEnrichment) {
           games = games.slice(0, options.limit);
         }
         
@@ -148,9 +194,9 @@ export function createLibraryCommand(): Command {
           console.error(chalk.bold(`\nFound ${games.length} games:\n`));
           
           if (options.plain) {
-            displayGamesList(games, options.deckHours, options.showReviews);
+            displayGamesList(games, options.deckHours, options.showReviews, options.showCompat);
           } else {
-            displayGamesTable(games, options.deckHours, options.showReviews);
+            displayGamesTable(games, options.deckHours, options.showReviews, options.showCompat);
           }
         }
         
@@ -177,6 +223,8 @@ function sortGames(games: GameInfo[], sortBy: string): GameInfo[] {
       return sorted.sort((a, b) => (b.playtimeDeck || 0) - (a.playtimeDeck || 0));
     case 'reviews':
       return sorted.sort((a, b) => (b.reviewScore || 0) - (a.reviewScore || 0));
+    case 'compat':
+      return sorted.sort((a, b) => (b.deckCompat ?? -1) - (a.deckCompat ?? -1));
     case 'name':
     default:
       return sorted.sort((a, b) => {

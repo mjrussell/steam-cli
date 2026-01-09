@@ -1,6 +1,6 @@
 {
   "name": "steam-cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "CLI tool for browsing and managing your Steam game library",
   "author": "Matt Russell <matthewjosephrussell@gmail.com>",
   "license": "MIT",
