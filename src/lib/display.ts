@@ -59,24 +59,30 @@ export function displayGamesTable(
   games: GameInfo[], 
   showDeck: boolean = false,
   showReviews: boolean = false,
-  showCompat: boolean = false
+  showCompat: boolean = false,
+  showTags: boolean = false
 ): void {
   const head = [chalk.cyan('Name'), chalk.cyan('Playtime')];
-  const colWidths = [35, 13];
+  const colWidths = [30, 12];
   
   if (showDeck) {
     head.push(chalk.cyan('Deck Time'));
-    colWidths.push(13);
+    colWidths.push(12);
   }
   
   if (showReviews) {
     head.push(chalk.cyan('Reviews'));
-    colWidths.push(24);
+    colWidths.push(22);
   }
   
   if (showCompat) {
     head.push(chalk.cyan('Deck'));
-    colWidths.push(14);
+    colWidths.push(12);
+  }
+  
+  if (showTags) {
+    head.push(chalk.cyan('Tags'));
+    colWidths.push(35);
   }
   
   head.push(chalk.cyan('App ID'));
@@ -102,6 +108,11 @@ export function displayGamesTable(
       row.push(formatDeckCompat(game.deckCompat, game.deckCompatDesc));
     }
     
+    if (showTags) {
+      const tags = game.tags?.slice(0, 3).join(', ') || chalk.gray('None');
+      row.push(tags);
+    }
+    
     row.push(game.appId?.toString() || 'N/A');
     table.push(row);
   }
@@ -113,7 +124,8 @@ export function displayGamesList(
   games: GameInfo[], 
   showDeck: boolean = false,
   showReviews: boolean = false,
-  showCompat: boolean = false
+  showCompat: boolean = false,
+  showTags: boolean = false
 ): void {
   for (const game of games) {
     const playtime = formatPlaytime(game.playtime || 0);
@@ -135,6 +147,10 @@ export function displayGamesList(
     if (showCompat) {
       const compat = formatDeckCompat(game.deckCompat, game.deckCompatDesc);
       output += ` [${compat}]`;
+    }
+    
+    if (showTags && game.tags?.length) {
+      output += ` ${chalk.yellow('[' + game.tags.slice(0, 3).join(', ') + ']')}`;
     }
     
     output += ` (${chalk.gray(appId)})`;

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { getUserLibrary, enrichGamesWithReviews, enrichGamesWithDeckCompat } from '../lib/steam';
+import { getUserLibrary, enrichAndFilter } from '../lib/steam';
+import type { EnrichOptions, FilterOptions } from '../lib/steam';
 import { displayGamesTable, displayGamesList } from '../lib/display';
 import type { GameInfo, DeckCompatCategory } from '../types/index';
 import { REVIEW_CATEGORIES, type ReviewCategory } from '../types/index';
@@ -87,11 +88,16 @@ export function createLibraryCommand(): Command {
     .option('--min-reviews <score>', 'Minimum review score (1-9)', parseInt)
     .option('--max-reviews <score>', 'Maximum review score (1-9)', parseInt)
     .option('--show-reviews', 'Show review scores in output')
+    .option('--genre <genre>', 'Filter by genre (partial match)')
+    .option('--tag <tag>', 'Filter by tag (partial match)')
+    .option('--show-tags', 'Show tags in output')
     .action(async (options) => {
       try {
         const needsReviews = options.reviews || options.minReviews || options.maxReviews || 
                            options.showReviews || options.sort === 'reviews';
         const needsDeckCompat = options.deckCompat || options.showCompat || options.sort === 'compat';
+        const needsGenresTags = options.genre || options.tag || options.showTags;
+        const needsEnrichment = needsReviews || needsDeckCompat || needsGenresTags;
         
         if (!options.json) {
           console.error(chalk.blue('Fetching your Steam library...'));
@@ -99,7 +105,7 @@ export function createLibraryCommand(): Command {
         
         let games = await getUserLibrary();
         
-        // Apply basic filters first (to minimize API calls)
+        // Apply local filters first (no API calls needed)
         if (options.unplayed) {
           games = games.filter(g => g.playtime === 0);
         }
@@ -118,73 +124,87 @@ export function createLibraryCommand(): Command {
           games = games.filter(g => (g.playtimeDeck || 0) > 0);
         }
         
-        // Apply early limit if no enrichment needed
-        const needsEnrichment = needsReviews || needsDeckCompat;
-        if (options.limit && !needsEnrichment) {
+        // If no enrichment needed, just sort and limit
+        if (!needsEnrichment) {
           games = sortGames(games, options.sort);
-          games = games.slice(0, options.limit);
-        }
-        
-        // Fetch reviews if needed
-        if (needsReviews) {
-          if (!options.json) {
-            console.error(chalk.blue(`Fetching reviews for ${games.length} games...`));
+          if (options.limit) {
+            games = games.slice(0, options.limit);
           }
+        } else {
+          // Build enrich and filter options
+          const enrich: EnrichOptions = {
+            reviews: needsReviews,
+            deckCompat: needsDeckCompat,
+            genresTags: needsGenresTags
+          };
           
-          games = await enrichGamesWithReviews(games, (current, total) => {
-            if (!options.json && process.stderr.isTTY) {
-              process.stderr.write(`\r${chalk.gray(`Reviews: ${current}/${total}`)}`);
-            }
-          });
+          const filter: FilterOptions = {};
           
-          if (!options.json && process.stderr.isTTY) {
-            process.stderr.write('\r' + ' '.repeat(30) + '\r');
-          }
-          
-          // Apply review filters
           if (options.reviews) {
-            const allowedScores = parseReviewFilter(options.reviews);
-            games = games.filter(g => g.reviewScore && allowedScores.includes(g.reviewScore));
+            filter.reviewScores = parseReviewFilter(options.reviews);
           }
-          
           if (options.minReviews !== undefined) {
-            games = games.filter(g => (g.reviewScore || 0) >= options.minReviews);
+            filter.minReviewScore = options.minReviews;
           }
-          
           if (options.maxReviews !== undefined) {
-            games = games.filter(g => (g.reviewScore || 0) <= options.maxReviews);
+            filter.maxReviewScore = options.maxReviews;
           }
-        }
-        
-        // Fetch deck compatibility if needed
-        if (needsDeckCompat) {
-          if (!options.json) {
-            console.error(chalk.blue(`Fetching Deck compatibility for ${games.length} games...`));
+          if (options.deckCompat) {
+            filter.deckCompatValues = parseDeckCompatFilter(options.deckCompat);
+          }
+          if (options.genre) {
+            filter.genres = [options.genre];
+          }
+          if (options.tag) {
+            filter.tags = [options.tag];
           }
           
-          games = await enrichGamesWithDeckCompat(games, (current, total) => {
-            if (!options.json && process.stderr.isTTY) {
-              process.stderr.write(`\r${chalk.gray(`Deck compat: ${current}/${total}`)}`);
+          const hasFilters = Object.keys(filter).length > 0;
+          const fetching = [
+            needsReviews ? 'reviews' : null,
+            needsDeckCompat ? 'deck compat' : null,
+            needsGenresTags ? 'tags' : null
+          ].filter(Boolean).join(' + ');
+          
+          // Pre-sort if we have filters + limit (for early termination on sorted order)
+          if (hasFilters && options.limit) {
+            games = sortGames(games, options.sort);
+          }
+          
+          if (!options.json) {
+            const limitNote = options.limit && hasFilters ? ` (stopping at ${options.limit})` : '';
+            console.error(chalk.blue(`Fetching ${fetching} for ${games.length} games${limitNote}...`));
+          }
+          
+          // Stream fusion: enrich + filter + early termination in single pass
+          games = await enrichAndFilter(
+            games,
+            enrich,
+            filter,
+            hasFilters ? options.limit : undefined,  // Only early terminate if filtering
+            (checked, found, total) => {
+              if (!options.json && process.stderr.isTTY) {
+                const status = options.limit && hasFilters 
+                  ? `Checked ${checked}/${total}, found ${found}/${options.limit}`
+                  : `Progress: ${checked}/${total}`;
+                process.stderr.write(`\r${chalk.gray(status)}`);
+              }
             }
-          });
+          );
           
           if (!options.json && process.stderr.isTTY) {
-            process.stderr.write('\r' + ' '.repeat(30) + '\r');
+            process.stderr.write('\r' + ' '.repeat(50) + '\r');
           }
           
-          // Apply deck compat filter
-          if (options.deckCompat) {
-            const allowedCompat = parseDeckCompatFilter(options.deckCompat);
-            games = games.filter(g => g.deckCompat !== undefined && allowedCompat.includes(g.deckCompat));
+          // Sort if we didn't pre-sort (no filters case)
+          if (!hasFilters || !options.limit) {
+            games = sortGames(games, options.sort);
           }
-        }
-        
-        // Apply sorting
-        games = sortGames(games, options.sort);
-        
-        // Apply limit (if not already applied)
-        if (options.limit && needsEnrichment) {
-          games = games.slice(0, options.limit);
+          
+          // Apply limit if no filters (enrichment without filtering)
+          if (!hasFilters && options.limit) {
+            games = games.slice(0, options.limit);
+          }
         }
         
         // Output results
@@ -194,9 +214,9 @@ export function createLibraryCommand(): Command {
           console.error(chalk.bold(`\nFound ${games.length} games:\n`));
           
           if (options.plain) {
-            displayGamesList(games, options.deckHours, options.showReviews, options.showCompat);
+            displayGamesList(games, options.deckHours, options.showReviews, options.showCompat, options.showTags);
           } else {
-            displayGamesTable(games, options.deckHours, options.showReviews, options.showCompat);
+            displayGamesTable(games, options.deckHours, options.showReviews, options.showCompat, options.showTags);
           }
         }
         

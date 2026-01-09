@@ -18,6 +18,8 @@ export interface GameInfo {
   reviewNegative?: number;
   deckCompat?: DeckCompatCategory;
   deckCompatDesc?: string;
+  genres?: string[];
+  tags?: string[];
 }
 
 export type DeckCompatCategory = 0 | 1 | 2 | 3;

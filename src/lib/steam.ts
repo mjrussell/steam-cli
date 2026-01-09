@@ -113,33 +113,30 @@ export async function getGameReviews(appId: number): Promise<ReviewData | null> 
   }
 }
 
-export async function enrichGamesWithReviews(
-  games: GameInfo[],
-  onProgress?: (current: number, total: number) => void
-): Promise<GameInfo[]> {
-  const enriched: GameInfo[] = [];
-  
-  for (let i = 0; i < games.length; i++) {
-    const game = games[i];
-    onProgress?.(i + 1, games.length);
+export interface GenreTagData {
+  genres: string[];
+  tags: string[];
+}
+
+export async function getGameGenresTags(appId: number): Promise<GenreTagData | null> {
+  try {
+    const response = await fetch(
+      `https://steamspy.com/api.php?request=appdetails&appid=${appId}`
+    );
+    const data = await response.json() as any;
     
-    const reviews = await getGameReviews(game.appId);
+    const genres = data.genre 
+      ? data.genre.split(', ').map((g: string) => g.trim()).filter(Boolean)
+      : [];
     
-    enriched.push({
-      ...game,
-      reviewScore: reviews?.reviewScore,
-      reviewScoreDesc: reviews?.reviewScoreDesc,
-      reviewPositive: reviews?.totalPositive,
-      reviewNegative: reviews?.totalNegative
-    });
+    const tags = data.tags 
+      ? Object.keys(data.tags)
+      : [];
     
-    // Small delay to avoid rate limiting
-    if (i < games.length - 1) {
-      await new Promise(r => setTimeout(r, 50));
-    }
+    return { genres, tags };
+  } catch {
+    return null;
   }
-  
-  return enriched;
 }
 
 export async function getDeckCompatibility(appId: number): Promise<DeckCompatCategory | null> {
@@ -159,29 +156,108 @@ export async function getDeckCompatibility(appId: number): Promise<DeckCompatCat
   }
 }
 
-export async function enrichGamesWithDeckCompat(
+export interface EnrichOptions {
+  reviews?: boolean;
+  deckCompat?: boolean;
+  genresTags?: boolean;
+}
+
+export interface FilterOptions {
+  reviewScores?: number[];
+  minReviewScore?: number;
+  maxReviewScore?: number;
+  deckCompatValues?: DeckCompatCategory[];
+  genres?: string[];
+  tags?: string[];
+}
+
+export async function enrichAndFilter(
   games: GameInfo[],
-  onProgress?: (current: number, total: number) => void
+  enrich: EnrichOptions,
+  filter: FilterOptions,
+  limit?: number,
+  onProgress?: (checked: number, found: number, total: number) => void
 ): Promise<GameInfo[]> {
-  const enriched: GameInfo[] = [];
+  const results: GameInfo[] = [];
   
   for (let i = 0; i < games.length; i++) {
+    // Early termination if we have enough
+    if (limit && results.length >= limit) {
+      break;
+    }
+    
     const game = games[i];
-    onProgress?.(i + 1, games.length);
+    onProgress?.(i + 1, results.length, games.length);
     
-    const compat = await getDeckCompatibility(game.appId);
+    // Fetch needed data in parallel
+    const [reviews, compat, genresTags] = await Promise.all([
+      enrich.reviews ? getGameReviews(game.appId) : Promise.resolve(null),
+      enrich.deckCompat ? getDeckCompatibility(game.appId) : Promise.resolve(null),
+      enrich.genresTags ? getGameGenresTags(game.appId) : Promise.resolve(null)
+    ]);
     
-    enriched.push({
+    // Build enriched game
+    const enriched: GameInfo = {
       ...game,
-      deckCompat: compat ?? undefined,
-      deckCompatDesc: compat !== null ? DECK_COMPAT_LABELS[compat] : undefined
-    });
+      ...(enrich.reviews && {
+        reviewScore: reviews?.reviewScore,
+        reviewScoreDesc: reviews?.reviewScoreDesc,
+        reviewPositive: reviews?.totalPositive,
+        reviewNegative: reviews?.totalNegative
+      }),
+      ...(enrich.deckCompat && {
+        deckCompat: compat ?? undefined,
+        deckCompatDesc: compat !== null ? DECK_COMPAT_LABELS[compat] : undefined
+      }),
+      ...(enrich.genresTags && {
+        genres: genresTags?.genres,
+        tags: genresTags?.tags
+      })
+    };
+    
+    // Check filters
+    let passes = true;
+    
+    if (filter.reviewScores && enriched.reviewScore !== undefined) {
+      passes = passes && filter.reviewScores.includes(enriched.reviewScore);
+    }
+    
+    if (filter.minReviewScore !== undefined) {
+      passes = passes && (enriched.reviewScore || 0) >= filter.minReviewScore;
+    }
+    
+    if (filter.maxReviewScore !== undefined) {
+      passes = passes && (enriched.reviewScore || 0) <= filter.maxReviewScore;
+    }
+    
+    if (filter.deckCompatValues) {
+      passes = passes && enriched.deckCompat !== undefined && 
+               filter.deckCompatValues.includes(enriched.deckCompat);
+    }
+    
+    if (filter.genres && filter.genres.length > 0) {
+      const gameGenres = enriched.genres?.map(g => g.toLowerCase()) || [];
+      passes = passes && filter.genres.some(fg => 
+        gameGenres.some(gg => gg.includes(fg.toLowerCase()))
+      );
+    }
+    
+    if (filter.tags && filter.tags.length > 0) {
+      const gameTags = enriched.tags?.map(t => t.toLowerCase()) || [];
+      passes = passes && filter.tags.some(ft => 
+        gameTags.some(gt => gt.includes(ft.toLowerCase()))
+      );
+    }
+    
+    if (passes) {
+      results.push(enriched);
+    }
     
     // Small delay to avoid rate limiting
-    if (i < games.length - 1) {
+    if (i < games.length - 1 && (!limit || results.length < limit)) {
       await new Promise(r => setTimeout(r, 50));
     }
   }
   
-  return enriched;
+  return results;
 }
