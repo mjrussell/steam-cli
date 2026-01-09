@@ -4,21 +4,22 @@ A command-line tool for browsing, filtering, and discovering games in your Steam
 
 ## Installation
 
+```bash
+npm install -g steam-games-cli
+```
+
 ### Prerequisites
 
 - Node.js 18+ 
 - Steam Web API key ([Get one here](https://steamcommunity.com/dev/apikey))
 
-### Install
+### From Source
 
 ```bash
 git clone https://github.com/mjrussell/steam-cli.git
 cd steam-cli
-pnpm install
-pnpm build
-
-# Link globally (optional)
-ln -s $(pwd)/dist/cli.js ~/.local/bin/steam
+pnpm install && pnpm build
+npm link
 ```
 
 ## Commands
@@ -27,6 +28,8 @@ ln -s $(pwd)/dist/cli.js ~/.local/bin/steam
 |---------|-------------|
 | `steam whoami` | Show current user profile and stats |
 | `steam library` | Browse and filter your game library |
+| `steam tags` | List all Steam tags (instant) |
+| `steam genres` | List all Steam genres (instant) |
 | `steam config` | Manage configuration |
 
 ## Quick Start
